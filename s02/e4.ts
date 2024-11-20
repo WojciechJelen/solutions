@@ -1,16 +1,23 @@
 import { join } from "path";
 import { readdir } from "fs/promises";
-import { OpenaiClient } from "../utils";
+import { AnthropicClient, OpenaiClient } from "../utils";
 import { writeFile } from "fs/promises";
 import { UtilsService } from "../utils/utils-service";
 
-const DIR_NAME = "files";
+type CacheEntry = {
+  content: string;
+  category: "people" | "hardware" | "software" | "other";
+};
 
 const ALLOWED_EXTENSIONS = ["mp3", "txt", "png", "unknown"] as const;
 type AllowedExtension = (typeof ALLOWED_EXTENSIONS)[number];
 
+const DIR_NAME = "files";
+
 const cacheFilePath = join(__dirname, "cache.json");
 const client = new OpenaiClient("gpt-4o");
+const anthropicClient = new AnthropicClient("claude-3-5-sonnet-20240620");
+const utilsService = new UtilsService();
 
 const initializeCache = async () => {
   try {
@@ -27,6 +34,11 @@ const cacheInJson = async (key: string, value: string, category: string) => {
     category,
   };
   writeFile(cacheFilePath, JSON.stringify(cache, null, 2));
+};
+
+const getCachedData = async () => {
+  const cache = JSON.parse(await Bun.file(cacheFilePath).text());
+  return cache;
 };
 
 const getContentFromFile = async (file: string) => {
@@ -89,10 +101,9 @@ Provide your categorization in the following format:
 <category>INSERT_CATEGORY_HERE</category>
   `;
 
-  const llmResponse = await client.getCompletion(prompt);
-  const responseText = llmResponse.choices[0].message.content?.trim();
+  const llmResponse = await anthropicClient.getCompletion(prompt);
 
-  const categoryMatch = responseText?.match(/<category>(.*?)<\/category>/);
+  const categoryMatch = llmResponse?.match(/<category>(.*?)<\/category>/);
   return categoryMatch?.[1] || "other";
 };
 
@@ -114,6 +125,23 @@ async function main() {
       }
     }
   }
+
+  // send all notes to Centrala
+  const cacheData = await getCachedData();
+
+  const people = Object.entries(cacheData as Record<string, CacheEntry>)
+    .filter(([_, note]) => note.category === "people")
+    .map(([key]) => key);
+  const hardware = Object.entries(cacheData as Record<string, CacheEntry>)
+    .filter(([_, note]) => note.category === "hardware")
+    .map(([key]) => key);
+
+  console.log(people, hardware);
+
+  await utilsService.sendAnswer("kategorie", {
+    people: people.sort(),
+    hardware: hardware.sort(),
+  });
 }
 
 main();
