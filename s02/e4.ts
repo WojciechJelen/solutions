@@ -52,41 +52,44 @@ async function main() {
   }
 
   for (const file of audioFiles) {
-    if (existingTranscriptions[file]) {
-      console.log(`File ${file} already transcribed, skipping.`);
+    const fileKey = `${file}.mp3`;
+    if (existingTranscriptions[fileKey]) {
+      console.log(`File ${fileKey} already transcribed, skipping.`);
       continue;
     }
 
-    const audioPath = join(__dirname, DIR_NAME, `${file}.mp3`);
+    const audioPath = join(__dirname, DIR_NAME, fileKey);
 
     // Create a File object from the BunFile
     const audioBlob = await Bun.file(audioPath).arrayBuffer();
-    const audioFile = new File([audioBlob], `${file}.mp3`, {
+    const audioFile = new File([audioBlob], fileKey, {
       type: "audio/mpeg",
     });
 
     const response = await client.getVoiceToText(audioFile);
-    transcriptions[file] = response.text;
+    transcriptions[fileKey] = response.text;
   }
 
   console.log("Audio files processed.");
 
   // Process text files and add to transcriptions
   for (const file of textFiles) {
-    if (existingTranscriptions[file]) {
-      console.log(`File ${file} already processed, skipping.`);
+    const fileKey = `${file}.txt`;
+    if (existingTranscriptions[fileKey]) {
+      console.log(`File ${fileKey} already processed, skipping.`);
       continue;
     }
 
-    const textPath = join(__dirname, DIR_NAME, `${file}.txt`);
+    const textPath = join(__dirname, DIR_NAME, fileKey);
     const text = await Bun.file(textPath).text();
-    transcriptions[file] = text;
+    transcriptions[fileKey] = text;
   }
 
   console.log("Text files processed.");
 
   for (const file of pngFiles) {
-    const imagePath = join(__dirname, DIR_NAME, `${file}.png`);
+    const fileKey = `${file}.png`;
+    const imagePath = join(__dirname, DIR_NAME, fileKey);
     const image = await Bun.file(imagePath).arrayBuffer();
     const base64Image = Buffer.from(image).toString("base64");
 
@@ -95,7 +98,7 @@ async function main() {
       "You are the advanced OCR system. Extract the text from the image."
     );
 
-    transcriptions[file] = response.choices[0].message.content as string;
+    transcriptions[fileKey] = response.choices[0].message.content as string;
   }
 
   console.log("Image files processed.");
@@ -110,6 +113,29 @@ async function main() {
     transcriptionsPath,
     JSON.stringify(updatedTranscriptions, null, 2)
   );
+
+  // get the content of the transcriptions.json file
+  const transcriptionsContent = await Bun.file(transcriptionsPath).text();
+  const transcriptionsObject = JSON.parse(transcriptionsContent);
+  for (const [file, content] of Object.entries(transcriptionsObject)) {
+    console.log(`${file}: ${content}`);
+  }
+
+  // sort files
+
+  // sort files
+  // client.getCompletion(
+  //   `You are the advanced human detection system. You will get the content of the file, and you will need to determine
+  //   if the content contains information about a human or a robot.
+
+  //   If it is about the human, you will return "human".
+  //   If it is about the robot, you will return "robot".
+  //   If it is not about the human or the robot, you will return "unknown".
+
+  //   Here is the content of the file:
+  //   ${JSON.stringify(updatedTranscriptions, null, 2)}
+  //   `
+  //);
 }
 
 main();
