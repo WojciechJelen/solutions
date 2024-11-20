@@ -1,2 +1,2 @@
-export * from "./anthropic_client";
-export * from "./openai_client";
+export * from "./anthropic-client";
+export * from "./openai-client";

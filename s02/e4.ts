@@ -27,9 +27,10 @@ const groupFilesByExtension = (
 };
 
 import { writeFile } from "fs/promises";
+import { UtilsService } from "../utils/utils-service";
 
 async function main() {
-  const client = new OpenaiClient();
+  const client = new OpenaiClient("gpt-4o");
   const files = await readdir(join(__dirname, DIR_NAME));
   const groupedFiles = groupFilesByExtension(files);
 
@@ -89,6 +90,11 @@ async function main() {
 
   for (const file of pngFiles) {
     const fileKey = `${file}.png`;
+    if (existingTranscriptions[fileKey]) {
+      console.log(`File ${fileKey} already processed, skipping.`);
+      continue;
+    }
+
     const imagePath = join(__dirname, DIR_NAME, fileKey);
     const image = await Bun.file(imagePath).arrayBuffer();
     const base64Image = Buffer.from(image).toString("base64");
@@ -114,28 +120,60 @@ async function main() {
     JSON.stringify(updatedTranscriptions, null, 2)
   );
 
-  // get the content of the transcriptions.json file
+  // get the content of the transcriptions.json file and sort files
+  const sortedFiles: Record<"people" | "hardware" | "unknown", string[]> = {
+    people: [],
+    hardware: [],
+    unknown: [],
+  };
   const transcriptionsContent = await Bun.file(transcriptionsPath).text();
   const transcriptionsObject = JSON.parse(transcriptionsContent);
   for (const [file, content] of Object.entries(transcriptionsObject)) {
-    console.log(`${file}: ${content}`);
+    // sort files
+    const response = await client.getCompletion(
+      `You need to classify if  the provided note is about humans or about the machines. For the context, you will have all notes provided, so you can use them to make a decision.
+
+    Note to analyze:
+    <note>
+    ${content}
+    </note>
+
+    All notes:
+    <notes>
+    ${Object.values(transcriptionsObject).join("\n")}
+    </notes>
+
+    Rules:
+    - If the text primarily describes or refers to a human being/person, respond with exactly "human"
+    - If the text primarily describes or refers to a machine, machine, or hardware system, respond with exactly "machine"
+    - If the text is ambiguous or describes neither a human nor a machine, respond with exactly "unknown"
+    - You have to be sure about your answer, there should be no doubt. If you are not sure, respond with "unknown".
+
+    Respond ONLY with one of these three words: "human", "machine", or "unknown". Do not include any other text or explanation.`
+    );
+
+    const type = response.choices[0].message.content as string;
+
+    if (type === "human") {
+      sortedFiles.people.push(file);
+    } else if (type === "machine") {
+      sortedFiles.hardware.push(file);
+    } else {
+      sortedFiles.unknown.push(file);
+    }
   }
 
-  // sort files
+  // sort alphabetically
+  sortedFiles.people.sort();
+  sortedFiles.hardware.sort();
+  sortedFiles.unknown.sort();
+  console.log("Final sorted files:", sortedFiles);
 
-  // sort files
-  // client.getCompletion(
-  //   `You are the advanced human detection system. You will get the content of the file, and you will need to determine
-  //   if the content contains information about a human or a robot.
-
-  //   If it is about the human, you will return "human".
-  //   If it is about the robot, you will return "robot".
-  //   If it is not about the human or the robot, you will return "unknown".
-
-  //   Here is the content of the file:
-  //   ${JSON.stringify(updatedTranscriptions, null, 2)}
-  //   `
-  //);
+  const utilsService = new UtilsService();
+  utilsService.sendAnswer("kategorie", {
+    hardware: sortedFiles.hardware,
+    people: sortedFiles.people,
+  });
 }
 
 main();
