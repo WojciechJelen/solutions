@@ -173,3 +173,10 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# files folder
+s02/files
+
+# cache.json
+
+cache.json
