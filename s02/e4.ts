@@ -20,11 +20,11 @@ const initializeCache = async () => {
   }
 };
 
-const cacheInJson = async (key: string, value: string) => {
+const cacheInJson = async (key: string, value: string, category: string) => {
   const cache = JSON.parse(await Bun.file(cacheFilePath).text());
   cache[key] = {
     content: value,
-    isHuman: null,
+    category,
   };
   writeFile(cacheFilePath, JSON.stringify(cache, null, 2));
 };
@@ -58,20 +58,60 @@ const getContentFromFile = async (file: string) => {
   }
 };
 
+const categorizeContent = async (content: string) => {
+  const prompt = `
+You will be given the content of a note. Your task is to analyze this content and categorize it based on specific criteria. Here's what you need to do:
+
+1. First, read the following note content carefully:
+<note_content>
+${content}
+</note_content>
+
+2. Your goal is to extract only the information related to:
+   a) Captured people or traces of their presence
+   b) Repaired hardware issues (ignore software-related issues)
+
+3. Based on the extracted information, you need to categorize the note into one of these categories:
+   - 'people': if the note contains information about captured individuals or evidence of human presence
+   - 'hardware': if the note mentions repaired hardware issues
+   - 'software': if the note only contains information about software issues
+   - 'other': if the note doesn't fit into any of the above categories
+
+4. To categorize the note:
+   - If you find information about captured people or traces of their presence, categorize it as 'people'
+   - If you find information about repaired hardware issues, categorize it as 'hardware'
+   - If you only find information about software issues, categorize it as 'software'
+   - If you don't find any relevant information or the note doesn't fit the above categories, categorize it as 'other'
+
+5. Your output should be just one word: the category you've determined ('people', 'hardware', 'software', or 'other'). Do not include any explanations or extracted information in your response.
+
+Provide your categorization in the following format:
+<category>INSERT_CATEGORY_HERE</category>
+  `;
+
+  const llmResponse = await client.getCompletion(prompt);
+  const responseText = llmResponse.choices[0].message.content?.trim();
+
+  const categoryMatch = responseText?.match(/<category>(.*?)<\/category>/);
+  return categoryMatch?.[1] || "other";
+};
+
 async function main() {
   await initializeCache();
   const files = await readdir(join(__dirname, DIR_NAME));
   const cache = JSON.parse(await Bun.file(cacheFilePath).text());
 
   for (const file of files) {
+    let content;
     if (cache[file]) {
-      continue;
-    }
+      content = cache[file].content;
+    } else {
+      content = await getContentFromFile(file);
 
-    const content = await getContentFromFile(file);
-    if (content) {
-      await cacheInJson(file, content);
-      console.log(content);
+      if (content) {
+        const category = await categorizeContent(content);
+        await cacheInJson(file, content, category);
+      }
     }
   }
 }
