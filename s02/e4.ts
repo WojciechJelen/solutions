@@ -169,6 +169,15 @@ async function main() {
   sortedFiles.unknown.sort();
   console.log("Final sorted files:", sortedFiles);
 
+  // save results JSON file with format fileName: type
+  const results = Object.entries(sortedFiles).map(([type, files]) =>
+    files.map((file) => ({ fileName: file, type }))
+  );
+  await Bun.write(
+    join(__dirname, DIR_NAME, "results.json"),
+    JSON.stringify(results, null, 2)
+  );
+
   const utilsService = new UtilsService();
   utilsService.sendAnswer("kategorie", {
     hardware: sortedFiles.hardware,
