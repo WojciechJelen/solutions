@@ -149,14 +149,28 @@ async function main() {
     - If the text is ambiguous or describes neither a human nor a machine, respond with exactly "unknown"
     - You have to be sure about your answer, there should be no doubt. If you are not sure, respond with "unknown".
 
-    Respond ONLY with one of these three words: "human", "machine", or "unknown". Do not include any other text or explanation.`
+    Think step by step before each answer and explain your decision. Your answer should be the thinking and one of the three words: "human", "machine", or "unknown". 
+    
+    <thinking>
+    {your thinking}
+    </thinking>
+
+    <answer>
+    {your answer}
+    </answer>
+
+`
     );
 
-    const type = response.choices[0].message.content as string;
+    const results = response.choices[0].message.content as string;
+    console.log("results", results);
+    const answer =
+      results.match(/<answer>(.*?)<\/answer>/s)?.[1]?.trim() ?? "unknown";
+    console.log("answer", answer);
 
-    if (type === "human") {
+    if (answer === "human") {
       sortedFiles.people.push(file);
-    } else if (type === "machine") {
+    } else if (answer === "machine") {
       sortedFiles.hardware.push(file);
     } else {
       sortedFiles.unknown.push(file);
