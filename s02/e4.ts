@@ -138,10 +138,12 @@ async function main() {
 
   console.log(people, hardware);
 
-  await utilsService.sendAnswer("kategorie", {
+  const response = await utilsService.sendAnswer("kategorie", {
     people: people.sort(),
     hardware: hardware.sort(),
   });
+
+  console.log(response);
 }
 
 main();
